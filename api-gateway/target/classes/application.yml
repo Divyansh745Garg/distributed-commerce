@@ -1,0 +1,30 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        # Route 1: Auth Service
+        - id: auth-service
+          uri: http://auth-service:8081 #http://localhost:8081
+          predicates:
+            - Path=/api/v1/auth/**
+
+        # Route 2: Product Service
+        - id: product-service
+          uri: http://product-service:8082 #http://localhost:8082
+          predicates:
+            - Path=/api/v1/products/**
+          filters:
+            - AuthenticationFilter # THE BOUNCER IS ACTIVE
+
+        # Route 3: Order Service
+        - id: order-service
+          uri: http://order-service:8083 #http://localhost:8083
+          predicates:
+            - Path=/api/v1/orders/**
+          filters:
+            - AuthenticationFilter # THE BOUNCER IS ACTIVE

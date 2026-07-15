@@ -1,0 +1,6 @@
+com\system\product\model\Product.class
+com\system\product\service\ProductService.class
+com\system\product\repository\ProductRepository.class
+com\system\product\config\RedisConfig.class
+com\system\product\controller\ProductController.class
+com\system\product\ProductApplication.class

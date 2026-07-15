@@ -1,0 +1,15 @@
+server:
+  port: 8081
+  shutdown: graceful
+
+spring:
+  application:
+    name: auth-service
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+jwt:
+  # Must be at least 256 bits (32 characters)
+  secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+  # 24 hours in milliseconds
+  expirationMs: 86400000

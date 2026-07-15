@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # 1. INFRASTRUCTURE (Databases & Brokers)
+  # ==========================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password  # Make sure this matches your DB password!
+      POSTGRES_DB: commerce_db
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  # ==========================================
+  # 2. MICROSERVICES (The Java Apps)
+  # ==========================================
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=password
+    depends_on:
+      - postgres
+
+  product-service:
+      build: ./product-service
+      container_name: product-service
+      ports:
+        - "8082:8082"
+      environment:
+        - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
+        - SPRING_DATASOURCE_USERNAME=postgres
+        - SPRING_DATASOURCE_PASSWORD=password
+      depends_on:
+        - postgres
+
+  order-service:
+      build: ./order-service
+      container_name: order-service
+      ports:
+        - "8083:8083"
+      environment:
+        - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
+        - SPRING_DATASOURCE_USERNAME=postgres
+        - SPRING_DATASOURCE_PASSWORD=password
+        - SPRING_DATA_REDIS_HOST=redis
+        - SPRING_RABBITMQ_HOST=rabbitmq
+      depends_on:
+        - postgres
+        - redis
+        - rabbitmq
+
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    ports:
+      - "8084:8084"
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+    depends_on:
+      - rabbitmq
+
+  # ==========================================
+  # 3. API GATEWAY (The Entry Point)
+  # ==========================================
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - product-service
+      - order-service
