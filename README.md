@@ -4,7 +4,7 @@ An event-driven, containerized e-commerce backend designed to demonstrate modern
 
 ## System Architecture
 
-![System Architecture Diagram](./image/Microservices Architecture.png)
+![System Architecture Diagram](./image/Architecture.png)
 This architecture utilizes a **"Castle and Moat" perimeter security model**. All internal microservices are isolated within a private Docker network and are inaccessible from the outside world. All traffic must pass through the API Gateway.
 
 ### Core Flows:
