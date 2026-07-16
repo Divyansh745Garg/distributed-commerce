@@ -5,7 +5,7 @@ An event-driven, containerized e-commerce backend designed to demonstrate modern
 ## System Architecture
 
 [![System Architecture Diagram](./image/Architecture.png)](./image/Architecture.png)
-This architecture utilizes a **"Castle and Moat" perimeter security model**. All internal microservices are isolated within a private Docker network and are inaccessible from the outside world. All traffic must pass through the API Gateway.
+This architecture utilizes a **"Castle and Moat" perimeter security model**. All internal microservices are isolated within a private Docker network and are inaccessible from the outside world. All traffic must pass through the API Gateway which makes a decision @ the starting - Should this API request even be allowed into my backend ecosystem, and if so, to which service and under what policies?.
 
 ### Core Flows:
 1. **Authentication Offloading:** The `api-gateway` intercepts all incoming requests, extracts the JWT, and cryptographically verifies it using a shared secret. If valid, it routes the traffic to downstream services. Downstream services do not contain security dependencies.
