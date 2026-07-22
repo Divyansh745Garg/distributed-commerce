@@ -24,10 +24,10 @@ This architecture utilizes a **"Castle and Moat" perimeter security model**. All
 
 | Service | Port | Description |
 | :--- | :--- | :--- |
-| `api-gateway` | `8080` | The single entry point. Handles routing and JWT validation (The Bouncer). |
-| `auth-service` | `8081` | Identity provider. Issues cryptographically signed JWTs. |
-| `product-service`| `8082` | Manages product catalog. Isolated behind the Gateway. |
-| `order-service` | `8083` | Handles checkout logic, Redis idempotency checks, and publishes events. |
+| `api-gateway` | `8080` | The single entry point. Handles routing and JWT validation (The Bouncer for the Resource Servers). |
+| `auth-service` | `8081` | Authorization Server. Issues cryptographically signed JWTs (Bearer Tokens)|
+| `product-service`| `8082` | Resource Server. Manages product catalog. Isolated behind the Gateway. |
+| `order-service` | `8083` | Resource Server. Handles checkout logic, Redis idempotency checks, and publishes events. |
 | `notification-service`| `8084` | Background worker that consumes RabbitMQ queues to simulate emails. |
 
 ## Local Development & Testing
