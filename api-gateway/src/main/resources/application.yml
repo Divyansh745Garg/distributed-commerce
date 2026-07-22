@@ -21,6 +21,7 @@ spring:
           filters:
             - AuthenticationFilter # THE BOUNCER IS ACTIVE
 
+
         # Route 3: Order Service
         - id: order-service
           uri: http://order-service:8083 #http://localhost:8083
@@ -28,3 +29,7 @@ spring:
             - Path=/api/v1/orders/**
           filters:
             - AuthenticationFilter # THE BOUNCER IS ACTIVE
+  data:
+    redis:
+     host: redis
+     port: 6379

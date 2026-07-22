@@ -7,7 +7,13 @@ spring:
     name: auth-service
   lifecycle:
     timeout-per-shutdown-phase: 30s
-
+  threads:
+    virtual:
+      enabled: true
+  data:
+    redis:
+     host: redis # Or whatever the name of the redis service is in your docker-compose.yml
+     port: 6379
 jwt:
   # Must be at least 256 bits (32 characters)
   secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
