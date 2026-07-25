@@ -12,6 +12,13 @@ spring:
           uri: http://auth-service:8081 #http://localhost:8081
           predicates:
             - Path=/api/v1/auth/**
+          filters:
+            - name: RequestRateLimiter # <-- RATE LIMITER: Prevents login brute-force
+              args:
+                redis-rate-limiter.replenishRate: 2
+                redis-rate-limiter.burstCapacity: 5
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@ipKeyResolver}"
 
         # Route 2: Product Service
         - id: product-service
@@ -20,7 +27,12 @@ spring:
             - Path=/api/v1/products/**
           filters:
             - AuthenticationFilter # THE BOUNCER IS ACTIVE
-
+            - name: RequestRateLimiter # <-- RATE LIMITER: Prevents API spam
+              args:
+                redis-rate-limiter.replenishRate: 2
+                redis-rate-limiter.burstCapacity: 5
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@ipKeyResolver}"
 
         # Route 3: Order Service
         - id: order-service
@@ -29,7 +41,13 @@ spring:
             - Path=/api/v1/orders/**
           filters:
             - AuthenticationFilter # THE BOUNCER IS ACTIVE
+            - name: RequestRateLimiter # <-- RATE LIMITER: Prevents API spam
+              args:
+                redis-rate-limiter.replenishRate: 2
+                redis-rate-limiter.burstCapacity: 5
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@ipKeyResolver}"
   data:
     redis:
-     host: redis
-     port: 6379
+      host: redis
+      port: 6379
