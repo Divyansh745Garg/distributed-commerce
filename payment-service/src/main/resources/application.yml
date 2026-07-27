@@ -1,0 +1,10 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: payment-service
+  data:
+    redis:
+      host: redis # Will change to 'redis' in Docker
+      port: 6379

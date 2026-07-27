@@ -92,3 +92,20 @@ services:
       - auth-service
       - product-service
       - order-service
+
+  payment-service: # <-- Indented exactly 2 spaces, aligned with order-service
+    container_name: payment-service
+    build:
+      context: ./payment-service
+    ports:
+      - "8085:8085"
+    environment:
+      - SPRING_DATA_REDIS_HOST=redis
+    depends_on:
+      - redis
+#    networks:
+#      - commerce-network
+
+networks:
+    commerce-network:
+      driver: bridge
