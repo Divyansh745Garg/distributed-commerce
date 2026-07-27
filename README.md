@@ -4,7 +4,7 @@ A highly scalable, distributed e-commerce backend built with **Java 21**, **Spri
 
 ## System Architecture
 
-[![System Architecture Diagram](./image/Architecture.png)](./image/Architecture.png)
+[![System Architecture Diagram](./image/Architecture2.png)](./image/Architecture2.png)
 
 ---
 
