@@ -1,29 +1,35 @@
 package com.system.order.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "orders")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Order {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
-    private Long productId;
+    @Column(nullable = false)
+    private String userId; // Storing Auth Service's User ID
 
-    private Integer quantity;
+    @Column(nullable = false)
+    private String status; // e.g., PENDING, CONFIRMED, FAILED
 
-    private BigDecimal totalPrice;
+    @Column(nullable = false, precision = 10, scale = 2)
+    private BigDecimal totalAmount;
 
-    private String customerEmail;
-
-    private String status;
+    // The "1 to Many" relationship.
+    // CascadeType.ALL means if we save/delete the Order, it automatically saves/deletes the OrderItems!
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderItem> orderItems;
 }

@@ -1,7 +1,7 @@
 package com.system.order.controller;
 
 import com.system.order.dto.OrderRequest;
-import com.system.order.model.Order;
+import com.system.order.dto.OrderResponse;
 import com.system.order.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,17 +17,9 @@ public class OrderController {
     private final OrderService orderService;
 
     @PostMapping
-    public ResponseEntity<?> placeOrder(
-            @RequestHeader(value = "Idempotency-Key") String idempotencyKey,
-            @Valid @RequestBody OrderRequest request) {
-        try {
-            Order order = orderService.createOrder(request, idempotencyKey);
-            return new ResponseEntity<>(order, HttpStatus.CREATED);
-        } catch (IllegalStateException e) {
-            // 409 Conflict - The user tried to submit the same order twice!
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Payment processing failed");
-        }
+    public ResponseEntity<OrderResponse> placeOrder(@Valid @RequestBody OrderRequest request) {
+        // Notice we call placeOrder() and only pass the request!
+        OrderResponse response = orderService.placeOrder(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

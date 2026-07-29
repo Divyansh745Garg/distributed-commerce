@@ -51,8 +51,10 @@ services:
         - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
         - SPRING_DATASOURCE_USERNAME=postgres
         - SPRING_DATASOURCE_PASSWORD=password
+        - SPRING_DATA_REDIS_HOST=redis  # <-- Added for Redis Caching
       depends_on:
         - postgres
+        - redis
 
   order-service:
       build: ./order-service

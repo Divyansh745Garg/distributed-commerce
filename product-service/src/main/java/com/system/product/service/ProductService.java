@@ -1,15 +1,18 @@
 package com.system.product.service;
 
+import com.system.product.dto.ProductRequest;
+import com.system.product.dto.ProductResponse;
 import com.system.product.model.Product;
 import com.system.product.repository.ProductRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.CachePut;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -18,35 +21,53 @@ public class ProductService {
 
     private final ProductRepository productRepository;
 
-    public Product createProduct(Product product) {
-        return productRepository.save(product);
+    @Transactional
+    public ProductResponse createProduct(ProductRequest request) {
+        log.info("Creating new product: {}", request.name());
+
+        // 1. Map DTO to Entity
+        Product product = Product.builder()
+                .name(request.name())
+                .description(request.description())
+                .price(request.price())
+                .stockQuantity(request.stockQuantity())
+                .isActive(true)
+                .build();
+
+        // 2. Save to Postgres
+        Product savedProduct = productRepository.save(product);
+
+        // 3. Map Entity back to Response DTO
+        return mapToResponse(savedProduct);
     }
 
-    public List<Product> getAllProducts() {
-        return productRepository.findAll();
+    @Transactional(readOnly = true)
+    public List getAllActiveProducts() {
+        log.info("Fetching all active products");
+        return productRepository.findAllByIsActiveTrue()
+                .stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
     }
 
-    @Cacheable(value = "products", key = "#id")
-    public Product getProductById(Long id) {
-        log.info("CACHE MISS: Fetching Product ID {} directly from PostgreSQL", id);
-        return productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+    @Transactional(readOnly = true)
+    public ProductResponse getProductById(UUID id) {
+        log.info("Fetching product with id: {}", id);
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
+
+        return mapToResponse(product);
     }
 
-    @CachePut(value = "products", key = "#product.id")
-    public Product updateProduct(Long id, Product product) {
-        log.info("Updating Product ID {} and refreshing Redis cache", id);
-        Product existingProduct = getProductById(id);
-        existingProduct.setName(product.getName());
-        existingProduct.setDescription(product.getDescription());
-        existingProduct.setPrice(product.getPrice());
-        existingProduct.setStockQuantity(product.getStockQuantity());
-        return productRepository.save(existingProduct);
-    }
-
-    @CacheEvict(value = "products", key = "#id")
-    public void deleteProduct(Long id) {
-        log.info("Deleting Product ID {} and evicting from Redis cache", id);
-        productRepository.deleteById(id);
+    // Helper method to keep our code DRY (Don't Repeat Yourself)
+    private ProductResponse mapToResponse(Product product) {
+        return new ProductResponse(
+                product.getId(),
+                product.getName(),
+                product.getDescription(),
+                product.getPrice(),
+                product.getStockQuantity(),
+                product.isActive()
+        );
     }
 }

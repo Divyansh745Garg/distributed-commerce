@@ -5,10 +5,13 @@ server:
 spring:
   application:
     name: order-service
+    config:
+      product-url: ${PRODUCT_SERVICE_URL:http://localhost:8082/api/v1/products}
   datasource:
-    url: jdbc:postgresql://localhost:5432/commerce_db
-    username: backend_user
-    password: secure_password
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/commerce_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
       ddl-auto: update
