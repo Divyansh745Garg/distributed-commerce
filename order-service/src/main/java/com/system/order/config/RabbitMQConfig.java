@@ -9,28 +9,29 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitMQConfig {
 
-    public static final String QUEUE_NAME = "order.notification.queue";
-    public static final String EXCHANGE_NAME = "order.exchange";
-    public static final String ROUTING_KEY = "order.completed";
+    // 1. Define the Queue Name
+    public static final String ORDER_CREATED_QUEUE = "order.created.queue";
+    public static final String ORDER_EXCHANGE = "order.exchange";
+    public static final String ORDER_ROUTING_KEY = "order.created.routing.key";
 
     @Bean
-    public Queue queue() {
-        return new Queue(QUEUE_NAME, true); // true = durable (survives restarts)
+    public Queue orderCreatedQueue() {
+        return new Queue(ORDER_CREATED_QUEUE, true); // true = durable (survives restarts)
     }
 
     @Bean
-    public TopicExchange exchange() {
-        return new TopicExchange(EXCHANGE_NAME);
+    public TopicExchange orderExchange() {
+        return new TopicExchange(ORDER_EXCHANGE);
     }
 
     @Bean
-    public Binding binding(Queue queue, TopicExchange exchange) {
-        return BindingBuilder.bind(queue).to(exchange).with(ROUTING_KEY);
+    public Binding binding(Queue orderCreatedQueue, TopicExchange orderExchange) {
+        return BindingBuilder.bind(orderCreatedQueue).to(orderExchange).with(ORDER_ROUTING_KEY);
     }
 
-    // This ensures our Java objects are sent as JSON strings
+    // 2. Convert Java Records to JSON automatically
     @Bean
-    public MessageConverter jsonMessageConverter() {
+    public MessageConverter messageConverter() {
         return new Jackson2JsonMessageConverter();
     }
 }

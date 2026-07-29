@@ -4,8 +4,10 @@ import com.system.order.dto.*;
 import com.system.order.model.Order;
 import com.system.order.model.OrderItem;
 import com.system.order.repository.OrderRepository;
+import com.system.order.config.RabbitMQConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,7 +25,9 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final RestTemplate restTemplate;
 
-    // Injected from application.yml
+    // 1. RabbitMQ Template injected here!
+    private final RabbitTemplate rabbitTemplate;
+
     @Value("${application.config.product-url}")
     private String productUrl;
 
@@ -31,16 +35,15 @@ public class OrderService {
     public OrderResponse placeOrder(OrderRequest request) {
         log.info("Placing order for user: {}", request.userId());
 
-        // 1. Initialize the parent Order
+        // 2. Initialize the parent Order
         Order order = Order.builder()
                 .userId(request.userId())
-                .status("PENDING") // Always starts as pending until paid
+                .status("PENDING")
                 .build();
 
-        // 2. Process each item in the cart
+        // 3. Process each item in the cart via RestTemplate
         List<OrderItem> orderItems = request.items().stream().map(itemRequest -> {
 
-            // REST CALL: Fetch the true price and stock from Product Service
             log.info("Fetching product details for ID: {}", itemRequest.productId());
             ProductResponse product = restTemplate.getForObject(
                     productUrl + "/" + itemRequest.productId(),
@@ -54,28 +57,41 @@ public class OrderService {
                 throw new IllegalArgumentException("Insufficient stock for product: " + product.name());
             }
 
-            // Create the Weak Entity and link it to the Parent
             return OrderItem.builder()
                     .productId(itemRequest.productId())
                     .quantity(itemRequest.quantity())
-                    .price(product.price()) // Using the verified price!
-                    .order(order)           // Establishing the ManyToOne link
+                    .price(product.price())
+                    .order(order)
                     .build();
 
         }).collect(Collectors.toList());
 
-        // Link the children back to the parent
         order.setOrderItems(orderItems);
 
-        // 3. Calculate the Total Amount
+        // 4. Calculate the Total Amount
         BigDecimal totalAmount = orderItems.stream()
                 .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         order.setTotalAmount(totalAmount);
 
-        // 4. Save to Database (Cascade saves the OrderItems automatically)
+        // 5. Save to Database
         Order savedOrder = orderRepository.save(order);
         log.info("Order saved successfully with ID: {}", savedOrder.getId());
+
+        // 6. BROADCAST THE EVENT TO RABBITMQ
+        OrderEvent event = new OrderEvent(
+                savedOrder.getId(),
+                savedOrder.getUserId(),
+                savedOrder.getTotalAmount(),
+                savedOrder.getStatus()
+        );
+
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.ORDER_EXCHANGE,
+                RabbitMQConfig.ORDER_ROUTING_KEY,
+                event
+        );
+        log.info("OrderCreated event published to RabbitMQ for order: {}", savedOrder.getId());
 
         return mapToResponse(savedOrder);
     }
