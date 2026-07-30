@@ -1,11 +1,12 @@
 server:
   port: 8084
+  shutdown: graceful
 
 spring:
   application:
     name: notification-service
   rabbitmq:
-    host: localhost
+    host: ${RABBITMQ_HOST:localhost}
     port: 5672
     username: guest
     password: guest

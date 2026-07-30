@@ -56,6 +56,7 @@ public class AuthController {
                     return ResponseEntity.ok("Successfully logged out. Token is blacklisted.");
                 }
             } catch (Exception e) {
+                e.printStackTrace(); // <-- ADD THIS LINE
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Token is invalid or already expired.");
             }
         }

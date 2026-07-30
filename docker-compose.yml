@@ -94,6 +94,7 @@ services:
       - auth-service
       - product-service
       - order-service
+      - redis
 
   payment-service: # <-- Indented exactly 2 spaces, aligned with order-service
     container_name: payment-service
@@ -102,9 +103,15 @@ services:
     ports:
       - "8085:8085"
     environment:
-      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=password
+      - RABBITMQ_HOST=rabbitmq
+      - REDIS_HOST=redis
     depends_on:
       - redis
+      - postgres
+      - rabbitmq
 #    networks:
 #      - commerce-network
 

@@ -14,6 +14,7 @@ public class RabbitMQConfig {
     public static final String ORDER_EXCHANGE = "order.exchange";
     public static final String ORDER_ROUTING_KEY = "order.created.routing.key";
 
+
     @Bean
     public Queue orderCreatedQueue() {
         return new Queue(ORDER_CREATED_QUEUE, true); // true = durable (survives restarts)

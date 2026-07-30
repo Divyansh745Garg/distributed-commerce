@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import reactor.core.publisher.Mono;
+import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -55,5 +56,14 @@ public class RateLimiterFallbackConfig {
                 return defaultLimiter.newConfig();
             }
         };
+    }
+
+    @Bean
+    public KeyResolver ipKeyResolver() {
+        return exchange -> Mono.just(
+                exchange.getRequest().getRemoteAddress() != null
+                        ? exchange.getRequest().getRemoteAddress().getAddress().getHostAddress()
+                        : "unknown"
+        );
     }
 }

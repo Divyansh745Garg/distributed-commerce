@@ -14,17 +14,25 @@ public class RabbitMQConfig {
         return new Queue("order.notification.queue", true);
     }
 
-    @Bean
-    public MessageConverter jsonMessageConverter() {
-        Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter();
-
-        // This is crucial for Microservices!
-        // It tells Spring to trust the JSON object even though it came
-        // from a different service (the Order Service).
-        DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper();
-        typeMapper.setTrustedPackages("*");
-        converter.setJavaTypeMapper(typeMapper);
-
-        return converter;
-    }
+//    @Bean
+//    public MessageConverter jsonMessageConverter() {
+//        Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter();
+//
+//        // This is crucial for Microservices!
+//        // It tells Spring to trust the JSON object even though it came
+//        // from a different service (the Order Service).
+//        DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper();
+//        typeMapper.setTrustedPackages("*");
+//        converter.setJavaTypeMapper(typeMapper);
+//
+//        return converter;
+//    }
+@Bean
+public MessageConverter messageConverter() {
+    Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter();
+    DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper();
+    typeMapper.setTrustedPackages("*"); // Trust the incoming JSON from the Payment Service
+    converter.setJavaTypeMapper(typeMapper);
+    return converter;
+}
 }
