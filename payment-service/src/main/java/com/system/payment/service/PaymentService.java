@@ -1,15 +1,16 @@
 package com.system.payment.service;
 
+import com.system.payment.config.RabbitMQConfig;
 import com.system.payment.dto.OrderEvent;
+import com.system.payment.dto.PaymentEvent;
+import com.system.payment.dto.PaymentFailedEvent;
 import com.system.payment.model.Payment;
 import com.system.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import com.system.payment.config.RabbitMQConfig;
-import com.system.payment.dto.PaymentEvent;
 
 import java.util.UUID;
 
@@ -19,35 +20,74 @@ import java.util.UUID;
 public class PaymentService {
 
     private final PaymentRepository paymentRepository;
-    private final RabbitTemplate rabbitTemplate; // 1. Inject the template
+    private final RabbitTemplate rabbitTemplate;
+
     @Transactional
     public void processPayment(OrderEvent event) {
         log.info("Processing payment of ${} for Order {}", event.totalAmount(), event.orderId());
 
-        // 1. Simulate a call to a Payment Gateway (Stripe/Razorpay)
-        String mockTransactionId = "txn_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        // 1. Simulate external payment gateway call
+        boolean paymentSuccessful = simulatePaymentGateway();
 
-        // 2. Build the Payment Record
-        Payment payment = Payment.builder()
-                .orderId(event.orderId())
-                .userId(event.userId())
-                .amount(event.totalAmount())
-                .status("SUCCESS") // Simulating a successful charge
-                .transactionId(mockTransactionId)
-                .build();
+        if (paymentSuccessful) {
+            // ==========================================
+            // PATH A: PAYMENT SUCCESS
+            // ==========================================
+            String mockTransactionId = "txn_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
 
-        // 3. Save to Database
-        paymentRepository.save(payment);
-        log.info("Payment SUCCESS. Transaction ID: {} saved to database.", mockTransactionId);
+            Payment payment = Payment.builder()
+                    .orderId(event.orderId())
+                    .userId(event.userId())
+                    .amount(event.totalAmount())
+                    .status("SUCCESS")
+                    .transactionId(mockTransactionId)
+                    .build();
 
-        // TODO: In the next step, we will broadcast a "PaymentCompleted" event back to RabbitMQ!
-        // 2. BROADCAST THE SUCCESS EVENT!
-        PaymentEvent paymentEvent = new PaymentEvent(event.orderId(), "COMPLETED");
-        rabbitTemplate.convertAndSend(
-                RabbitMQConfig.PAYMENT_EXCHANGE,
-                RabbitMQConfig.PAYMENT_COMPLETED_ROUTING_KEY,
-                paymentEvent
-        );
-        log.info("PaymentCompleted event published for order: {}", event.orderId());
+            paymentRepository.save(payment);
+            log.info("✅ Payment SUCCESS. Transaction ID: {} saved to database.", mockTransactionId);
+
+            PaymentEvent paymentEvent = new PaymentEvent(event.orderId(), "COMPLETED");
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConfig.PAYMENT_EXCHANGE,
+                    RabbitMQConfig.PAYMENT_COMPLETED_ROUTING_KEY,
+                    paymentEvent
+            );
+            log.info("PaymentCompleted event published for order: {}", event.orderId());
+
+        } else {
+            // ==========================================
+            // PATH B: PAYMENT FAILED (TRIGGER SAGA ROLLBACK)
+            // ==========================================
+            log.error("❌ Payment Declined for Order: {}", event.orderId());
+
+            // Save the failed attempt to the database for our records
+            Payment payment = Payment.builder()
+                    .orderId(event.orderId())
+                    .userId(event.userId())
+                    .amount(event.totalAmount())
+                    .status("FAILED")
+                    .build();
+            paymentRepository.save(payment);
+
+            // Broadcast the failure to RabbitMQ so the Order Service can catch it
+            PaymentFailedEvent failedEvent = new PaymentFailedEvent(
+                    event.orderId(),
+                    "Insufficient Funds"
+            );
+
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConfig.PAYMENT_EXCHANGE,
+                    "payment.failed.routing.key",
+                    failedEvent
+            );
+
+            log.info("PaymentFailedEvent published. Awaiting Order Service to initiate rollback.");
+        }
+    }
+
+    // Helper method to let you test the Rollback!
+    private boolean simulatePaymentGateway() {
+        // TODO: Change this to 'false' when you want to test the Saga Rollback!
+        return false;
     }
 }

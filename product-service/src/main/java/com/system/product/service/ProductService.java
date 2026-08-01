@@ -70,4 +70,16 @@ public class ProductService {
                 product.isActive()
         );
     }
+
+    @Transactional
+    public void restoreStock(UUID productId, Integer quantity) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new IllegalArgumentException("Product not found for rollback: " + productId));
+
+        // The Compensation: Add the stock back!
+        product.setStockQuantity(product.getStockQuantity() + quantity);
+        productRepository.save(product);
+
+        log.warn("🔄 SAGA COMPENSATION: Restored {} units for product {}", quantity, productId);
+    }
 }

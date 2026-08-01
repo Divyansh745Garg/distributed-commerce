@@ -24,6 +24,11 @@ spring:
       # Docker injects 'redis', IDE uses 'localhost'
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: 6379
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:rabbitmq}
+    port: 5672
+    username: guest
+    password: guest
   cache:
     type: redis
   threads:

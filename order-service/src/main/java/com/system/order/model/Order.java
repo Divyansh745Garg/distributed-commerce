@@ -20,16 +20,16 @@ public class Order {
     private UUID id;
 
     @Column(nullable = false)
-    private String userId; // Storing Auth Service's User ID
-
-    @Column(nullable = false)
-    private String status; // e.g., PENDING, CONFIRMED, FAILED
+    private String userId;
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal totalAmount;
 
-    // The "1 to Many" relationship.
-    // CascadeType.ALL means if we save/delete the Order, it automatically saves/deletes the OrderItems!
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> orderItems;
+
+    // ONLY ONE status field allowed! We use the Enum.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private OrderStatus status;
 }

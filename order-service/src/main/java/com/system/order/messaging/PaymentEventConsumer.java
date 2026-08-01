@@ -1,5 +1,5 @@
 package com.system.order.messaging;
-
+import com.system.order.model.OrderStatus; //at the top!
 import com.system.order.dto.PaymentEvent;
 import com.system.order.model.Order;
 import com.system.order.repository.OrderRepository;
@@ -33,7 +33,7 @@ public class PaymentEventConsumer {
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + event.orderId()));
 
         // 2. Update the status and save!
-        order.setStatus(event.status());
+        order.setStatus(OrderStatus.COMPLETED);
         orderRepository.save(order);
 
         log.info("Order {} status successfully updated to {}", order.getId(), order.getStatus());

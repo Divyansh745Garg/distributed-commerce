@@ -1,95 +1,154 @@
-# Distributed E-Commerce Microservices Architecture
+# Distributed E-Commerce Backend
 
-A highly scalable, distributed e-commerce backend built with **Java 21**, **Spring Boot 3**, and **Docker**. This project follows a production-inspired microservices architecture designed to support high concurrency, centralized security, asynchronous event-driven communication, and cloud-native scalability.
+> A production-inspired distributed e-commerce platform built with **Java 21**, **Spring Boot 3**, **Docker**, **RabbitMQ**, **Redis**, and **PostgreSQL**. The project demonstrates enterprise backend architecture through microservices, Saga-based distributed transactions, stateless authentication, event-driven communication, and scalable system design.
+
+---
+
+# Overview
+
+Modern e-commerce systems are far more than CRUD applications. They must process concurrent requests, coordinate multiple independent services, recover gracefully from failures, and maintain consistency across distributed components.
+
+This project explores those engineering challenges by implementing a production-inspired checkout system composed of independently deployable microservices.
+
+The architecture demonstrates:
+
+- Database-per-Service architecture
+- Saga Choreography for distributed transactions
+- Stateless JWT authentication
+- API Gateway security perimeter
+- Redis-backed idempotency & token blacklisting
+- RabbitMQ event-driven messaging
+- Java 21 Virtual Threads
+- Eventual consistency
+- Independent service scalability
+
+Rather than focusing only on framework usage, the project emphasizes architectural trade-offs commonly encountered in real-world distributed systems.
 
 ---
 
 # System Architecture
 
 <p align="center">
-  <img src="image/Architecture3.png" alt="Distributed E-Commerce Architecture" width="100%">
+    <img src="./image/HLD.png" width="1100">
 </p>
 
----
+The system is designed around loose coupling, clear ownership boundaries, and fault isolation.
 
-# Architectural Overview
-
-This backend is designed around modern distributed system principles commonly used in production-scale applications.
-
-### Castle & Moat Security Perimeter
-
-All internal microservices reside inside a private Docker network.
-
-The **API Gateway** acts as the only public entry point into the system. It takes the decision - Should this API request even be allowed into my backend ecosystem, and if so, to which service and under what policies?
-
-It is responsible for:
-
-- JWT Authentication & Verification
-- Request Routing
-- Redis Token Blacklisting
-- Rate Limiting
-- Request Logging
-
-Internal services never expose themselves publicly and remain completely unaware of authentication concerns.
+Every microservice owns a single business capability and communicates with other services exclusively through REST APIs or asynchronous events.
 
 ---
 
-### Stateless Session Management
+# Core Design Principles
 
-Since JWT authentication is stateless, traditional server-side sessions do not exist.
+The architecture follows several principles commonly adopted in production distributed systems.
 
-To support secure logout:
-
-- The Auth Service places revoked JWTs into a **Redis blacklist**
-- Each entry is stored with the token's remaining TTL
-- Every incoming request is checked by the API Gateway with an **O(1)** Redis lookup
-
-This prevents replay attacks using previously valid JWTs.
-
----
-
-### CAP-Theorem Aware Rate Limiting
-
-Redis is also used for distributed request throttling. 
-
-The gateway implements different failure strategies depending on endpoint sensitivity:
-
-| Route | Behaviour |
-|--------|-----------|
-| `/orders` | Fail Closed |
-| `/auth` | Fail Closed |
-| `/products` | Fail Open |
-
-This balances **Consistency**, **Availability**, and **Security** depending on business requirements. For something like scrolling of product catalogues, we can have the rate limiting as always available and then relying on eventual consistency and the service may not be down that time. But in case of sensitive operations like payments, the rate limiting has to be strongly consistent and if the rate limiter is offline, system may have to be taken offline for protected transactions. 
+- Single Responsibility per Microservice
+- Database-per-Service Pattern
+- Bounded Contexts
+- Stateless Authentication
+- Event-Driven Communication
+- Eventual Consistency
+- Failure-Oriented Design
+- Horizontal Scalability
+- High-Concurrency Processing
+- Loose Coupling via Messaging
 
 ---
 
-### Database-per-Service
+# Engineering Decisions
 
-Although all services share a single PostgreSQL server physically, each service owns an independent logical database.
+Instead of optimizing only for functionality, this project prioritizes maintainability, scalability, and resilience.
+
+---
+
+## 1. Castle & Moat Security
+
+All business services reside inside an isolated Docker network.
+
+The **Spring Cloud Gateway** is the **only public entry point** into the system.
+
+The gateway is responsible for:
+
+- JWT signature verification
+- Authentication
+- Authorization
+- Request routing
+- Rate limiting
+- Token blacklist validation
+- Request filtering
+
+Internal microservices remain completely unaware of authentication logic.
+
+This significantly reduces security complexity and follows the "Castle & Moat" architectural pattern.
+
+---
+
+## 2. Stateless Authentication
+
+The platform uses cryptographically signed JWT tokens.
+
+Since JWTs are stateless, logout cannot invalidate tokens automatically.
+
+To solve this:
+
+- revoked tokens are stored inside Redis
+- Redis entries expire automatically using TTL
+- Gateway performs O(1) blacklist lookups
+
+This preserves stateless authentication while preventing replay attacks.
+
+---
+
+## 3. Redis-backed Idempotency
+
+Financial APIs cannot rely on clients behaving correctly.
+
+If a user clicks **Place Order** twice, the backend must guarantee that payment executes only once.
+
+Every checkout request includes an
 
 ```
-PostgreSQL Server
-│
-├── auth_db
-├── product_db
-├── order_db
-└── payment_db
+Idempotency-Key
 ```
 
-Each service exclusively owns its own schema.
+The Order Service:
 
-No service performs cross-database joins.
+- acquires a Redis lock
+- detects duplicate requests
+- immediately returns the cached response
+- prevents duplicate payment processing
 
-All communication occurs strictly through APIs or asynchronous events.
+This mirrors production payment systems such as Stripe.
 
 ---
 
-### Hybrid Service Communication
+## 4. Database-per-Service
 
-The architecture combines synchronous and asynchronous communication.
+Although all services share a single PostgreSQL container, each microservice owns an isolated logical database.
 
-#### Synchronous HTTP
+```
+auth_db
+product_db
+order_db
+payment_db
+```
+
+No service performs SQL joins across another service's schema.
+
+Instead, services communicate through:
+
+- synchronous REST
+- asynchronous RabbitMQ events
+
+This maintains loose coupling and enables independent deployments.
+
+---
+
+## 5. Choosing Synchronous vs Asynchronous Communication
+
+Different operations require different communication models.
+
+### Synchronous REST
 
 Used whenever immediate consistency is required.
 
@@ -102,74 +161,281 @@ Order Service
 Product Service
 ```
 
-Before creating an order, the Order Service verifies product availability through a REST API call.
+Inventory must be reserved before checkout continues.
+
+This prevents overselling.
 
 ---
 
-#### Asynchronous Messaging
+### Asynchronous Messaging
 
-RabbitMQ is used for background processing.
-
-Example flow:
+Used whenever the client should not wait for downstream processing.
 
 ```
-Order Created
-      │
-      ▼
+Order Service
+
+↓
+
 RabbitMQ
-      │
-      ▼
+
+↓
+
 Notification Service
 ```
 
-This allows emails, SMS notifications, and other background tasks to execute without blocking user requests.
+Checkout returns immediately while emails are processed in the background.
 
-The architecture is also designed to evolve into a **Saga-based distributed transaction system**.
-
----
-
-### High Concurrency
-
-All synchronous services leverage **Java 21 Virtual Threads (Project Loom)**.
-
-Benefits include:
-
-- Thousands of concurrent HTTP requests
-- Massive concurrent database operations
-- Lower memory consumption
-- Simpler imperative programming model
-
-without the complexity of reactive programming across every service.
+This reduces latency and isolates slow downstream services.
 
 ---
 
-#  Tech Stack
+## 6. Why Payment is an Independent Service
+
+Payment processing is intentionally isolated instead of being embedded inside the Order Service.
+
+Reasons include:
+
+- PCI-DSS security boundaries
+- independent deployment
+- gateway abstraction
+- anti-corruption layer
+- easier migration between payment providers
+- long-running payment workflows
+
+If Stripe is replaced with Razorpay, only the Payment Service changes.
+
+The remainder of the platform remains untouched.
+
+---
+
+## 7. Middleware Request Pipeline
+
+Every request entering the system flows through a chain of Gateway filters.
+
+```
+Incoming Request
+
+↓
+
+Logging Filter
+
+↓
+
+Authentication Filter
+
+↓
+
+JWT Validation
+
+↓
+
+Rate Limiting
+
+↓
+
+Redis Blacklist Check
+
+↓
+
+Routing
+
+↓
+
+Microservice
+```
+
+Each filter has a single responsibility, improving maintainability and extensibility.
+
+---
+
+## 8. High-Concurrency Processing
+
+Blocking workloads such as:
+
+- database queries
+- HTTP requests
+- RabbitMQ communication
+
+are handled using **Java 21 Virtual Threads (Project Loom)**.
+
+Compared with traditional thread-per-request models, virtual threads allow significantly higher concurrency while consuming fewer operating system resources.
+
+---
+
+## 9. Failure-Oriented Design
+
+Distributed systems must assume failures will occur.
+
+Examples include:
+
+- network timeouts
+- duplicate client retries
+- service crashes
+- RabbitMQ consumer downtime
+- payment gateway latency
+
+Instead of attempting to eliminate failures, the architecture is designed to recover from them safely.
+
+---
+
+## 10. Eventual Consistency
+
+Traditional ACID transactions cannot span multiple independent databases.
+
+Instead, the platform embraces eventual consistency through Saga Choreography.
+
+Every microservice commits only its own local transaction.
+
+Cross-service consistency is achieved through asynchronous domain events.
+
+---
+
+# Distributed Transactions (Saga Choreography)
+
+<p align="center">
+    <img src="./image/SAGA Sequence.png" width="1100">
+</p>
+
+The checkout workflow coordinates multiple independent services without distributed locks or two-phase commit.
+
+---
+
+## Checkout Lifecycle
+
+### Step 1
+
+The client sends a request through the API Gateway.
+
+The Gateway:
+
+- authenticates JWT
+- validates blacklist
+- routes request
+
+---
+
+### Step 2
+
+Order Service validates the Idempotency-Key.
+
+Duplicate submissions immediately return the cached response.
+
+---
+
+### Step 3
+
+Order Service synchronously contacts Product Service.
+
+Inventory is reserved before payment begins.
+
+---
+
+### Step 4
+
+The Order is stored as
+
+```
+PAYMENT_PENDING
+```
+
+and an `OrderCreatedEvent` is published to RabbitMQ.
+
+---
+
+### Step 5
+
+Payment Service consumes the event.
+
+Payment processing begins independently.
+
+---
+
+### Success Path
+
+```
+PaymentCompletedEvent
+
+↓
+
+Order Status = COMPLETED
+
+↓
+
+Notification Service
+
+↓
+
+Email Sent
+```
+
+---
+
+### Failure Path
+
+```
+PaymentFailedEvent
+
+↓
+
+Order Status = PAYMENT_FAILED
+
+↓
+
+StockRollbackEvent
+
+↓
+
+Inventory Restored
+```
+
+Instead of global transactions, compensation events restore consistency across services.
+
+---
+
+# Scalability Strategy
+
+Every microservice is independently deployable and horizontally scalable.
+
+```
+                 API Gateway
+                      │
+      ┌───────────────┼───────────────┐
+      │               │               │
+   Order x4       Product x2      Payment x6
+```
+
+Because services remain stateless, additional replicas can be launched without architectural changes.
+
+Independent scaling reduces infrastructure cost while improving throughput.
+
+---
+
+# Technology Stack
 
 | Category | Technology |
 |-----------|------------|
-| **Language** | Java 21 |
-| **Framework** | Spring Boot 3.x |
-| **Gateway** | Spring Cloud Gateway |
-| **Web Server** | Netty (WebFlux) |
-| **Database** | PostgreSQL |
-| **Cache** | Redis |
-| **Message Broker** | RabbitMQ |
-| **Security** | JWT (jjwt) |
-| **Containerization** | Docker & Docker Compose |
-| **Concurrency** | Java 21 Virtual Threads |
+| Language | Java 21 |
+| Framework | Spring Boot 3 |
+| API Gateway | Spring Cloud Gateway |
+| Database | PostgreSQL |
+| Cache | Redis |
+| Messaging | RabbitMQ |
+| Security | JWT |
+| Containerization | Docker & Docker Compose |
+| Concurrency | Java 21 Virtual Threads |
 
 ---
 
 # Microservices
 
-| Service | Port | Responsibilities |
-|-----------|------|------------------|
-| **API Gateway** | 8080 | Reverse proxy, JWT validation, routing, rate limiting, Redis blacklist |
-| **Auth Service** | 8081 | User authentication, JWT issuance, logout management |
-| **Product Service** | 8082 | Product catalog and inventory management |
-| **Order Service** | 8083 | Checkout workflow, stock verification, order creation |
-| **Notification Service** | 8084 | Asynchronous email/SMS notifications |
-| **Payment Service** *(Planned)* | 8085 | Payment processing with Redis-backed idempotency |
+| Service | Port | Responsibility |
+|----------|------|----------------|
+| API Gateway | 8080 | Routing, authentication, authorization, rate limiting |
+| Auth Service | 8081 | User registration, login, JWT issuance |
+| Product Service | 8082 | Product catalog and inventory management |
+| Order Service | 8083 | Checkout workflow, idempotency, order lifecycle |
+| Payment Service | 8085 | Payment processing and Saga events |
+| Notification Service | 8084 | Email and notification processing |
 
 ---
 
@@ -177,24 +443,24 @@ without the complexity of reactive programming across every service.
 
 ## Prerequisites
 
-- Java 21 JDK
+- Java 21
+- Maven
 - Docker Desktop
 - Docker Compose
 
 ---
 
-## Clone Repository
+## Clone
 
 ```bash
-git clone https://github.com/<your-username>/distributed-ecommerce.git
+git clone https://github.com/Divyansh745Garg/distributed-commerce.git
+
 cd distributed-ecommerce
 ```
 
 ---
 
-## Build All Services
-
-Compile every Spring Boot microservice.
+## Build
 
 ```bash
 ./mvnw clean package -DskipTests
@@ -202,129 +468,155 @@ Compile every Spring Boot microservice.
 
 ---
 
-## Start the Entire Cluster
+## Start
 
 ```bash
-docker-compose up --build -d
+docker compose up --build -d
 ```
 
-This starts:
-
-- PostgreSQL
-- Redis
-- RabbitMQ
-- API Gateway
-- Auth Service
-- Product Service
-- Order Service
-- Notification Service
-
-Wait approximately **20–30 seconds** before sending requests.
+Wait approximately 30 seconds for PostgreSQL, Redis, and RabbitMQ to initialize.
 
 ---
 
-## Verify Deployment
-
-Check the gateway logs.
+## Verify
 
 ```bash
-docker logs api-gateway
+docker compose ps
+```
+
+or
+
+```bash
+docker compose logs api-gateway
 ```
 
 ---
 
-# Cleanup
+# Testing the Checkout Flow
 
-Stop the cluster.
+## Authenticate
 
-```bash
-docker-compose down
+```
+POST /api/v1/auth/login
 ```
 
-Remove unused Docker layers.
+Retrieve the generated JWT.
 
-```bash
-docker system prune -f
+---
+
+## Create an Order
+
+```
+POST /api/v1/orders
+```
+
+Headers
+
+```
+Authorization: Bearer <JWT>
+
+Idempotency-Key: order-001
+```
+
+Body
+
+```json
+{
+  "userId": "user-123",
+  "items": [
+    {
+      "productId": "<PRODUCT_UUID>",
+      "quantity": 2
+    }
+  ]
+}
 ```
 
 ---
 
-# Project Highlights
+## Verify Idempotency
 
-- API Gateway architecture
-- JWT Authentication
-- Redis Token Blacklisting
-- Distributed Rate Limiting
-- RabbitMQ Event-Driven Communication
-- Database-per-Service Design
-- Idempotent Transactions in Payment Microservice
-- Java 21 Virtual Threads
-- Dockerized Microservices
-- Production-inspired Service Isolation
+Repeat the same request using the same `Idempotency-Key`.
+
+The cached response is returned immediately without executing payment again.
 
 ---
 
-# Future Enhancements
+## Simulate Payment Failure
 
-## Saga Pattern
+Observe:
 
-Implement distributed transactions for:
+```bash
+docker compose logs -f
+```
 
-- Inventory Reservation
-- Payment Confirmation
-- Automatic Rollbacks
-- Compensation Events
+Saga execution:
 
----
+```
+OrderCreatedEvent
 
-## Distributed Tracing
+↓
 
-Integrate:
+PaymentFailedEvent
 
-- OpenTelemetry
-- Zipkin
+↓
 
-for complete request tracing across every microservice.
+StockRollbackEvent
 
----
+↓
 
-## Centralized Exception Handling
-
-Introduce shared error contracts using:
-
-- `@ControllerAdvice`
-- Global Exception Handlers
-
-to provide consistent API responses.
+Inventory Restored
+```
 
 ---
 
-## Service Discovery
+# Project Structure
 
-Integrate **Netflix Eureka** for dynamic service registration and horizontal scaling.
+```
+distributed-ecommerce
+│
+├── api-gateway
+├── auth-service
+├── product-service
+├── order-service
+├── payment-service
+├── notification-service
+│
+├── docker-compose.yml
+├── pom.xml
+└── README.md
+```
 
 ---
 
-## API Documentation
+# Future Improvements
 
-Generate interactive REST documentation using:
-
-- SpringDoc OpenAPI
-- Swagger UI
+- OpenTelemetry distributed tracing
+- Zipkin integration
+- Resilience4j circuit breakers
+- Kafka event streaming
+- Kubernetes deployment
+- GitHub Actions CI/CD
+- Prometheus & Grafana monitoring
+- Service Discovery using Eureka
+- Cache-aside strategy for product catalog
+- Reconciliation jobs for payment verification
 
 ---
 
-# Learning Objectives
+# Concepts Demonstrated
 
-This project demonstrates practical implementation of several distributed systems concepts:
-
+- Distributed Systems
 - Microservices Architecture
-- API Gateway Pattern
+- Domain-Driven Service Boundaries
+- Saga Choreography
 - Event-Driven Architecture
 - Stateless Authentication
-- Distributed Caching
-- Rate Limiting
-- Database-per-Service
-- Asynchronous Messaging
+- JWT Security
+- Redis Idempotency
+- RabbitMQ Messaging
+- Eventual Consistency
+- Failure Recovery
 - High-Concurrency Backend Design
-- Cloud-Native Deployment
+- Horizontal Scalability
+- Enterprise Backend Engineering

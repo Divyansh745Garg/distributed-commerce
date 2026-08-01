@@ -3,6 +3,7 @@ package com.system.order.service;
 import com.system.order.dto.*;
 import com.system.order.model.Order;
 import com.system.order.model.OrderItem;
+import com.system.order.model.OrderStatus;
 import com.system.order.repository.OrderRepository;
 import com.system.order.config.RabbitMQConfig;
 import lombok.RequiredArgsConstructor;
@@ -24,8 +25,6 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final RestTemplate restTemplate;
-
-    // 1. RabbitMQ Template injected here!
     private final RabbitTemplate rabbitTemplate;
 
     @Value("${application.config.product-url}")
@@ -33,15 +32,16 @@ public class OrderService {
 
     @Transactional
     public OrderResponse placeOrder(OrderRequest request) {
-        log.info("Placing order for user: {}", request.userId());
+        log.info("Starting Saga for user: {}", request.userId());
 
-        // 2. Initialize the parent Order
+        // 1. STATE: CREATED
         Order order = Order.builder()
                 .userId(request.userId())
-                .status("PENDING")
+                .status(OrderStatus.CREATED)
                 .build();
 
-        // 3. Process each item in the cart via RestTemplate
+        // 2. Synchronous Check via RestTemplate
+        // FIXED: Added <OrderItem> to the List
         List<OrderItem> orderItems = request.items().stream().map(itemRequest -> {
 
             log.info("Fetching product details for ID: {}", itemRequest.productId());
@@ -63,27 +63,33 @@ public class OrderService {
                     .price(product.price())
                     .order(order)
                     .build();
-
         }).collect(Collectors.toList());
 
         order.setOrderItems(orderItems);
 
-        // 4. Calculate the Total Amount
+        // 3. STATE: STOCK_RESERVED
+        order.setStatus(OrderStatus.STOCK_RESERVED);
+
+        // No more red lines here because orderItems is explicitly List<OrderItem>!
         BigDecimal totalAmount = orderItems.stream()
                 .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         order.setTotalAmount(totalAmount);
 
-        // 5. Save to Database
+        // 4. Save to DB
         Order savedOrder = orderRepository.save(order);
-        log.info("Order saved successfully with ID: {}", savedOrder.getId());
+
+        // 5. STATE: PAYMENT_PENDING
+        savedOrder.setStatus(OrderStatus.PAYMENT_PENDING);
+        savedOrder = orderRepository.save(savedOrder);
+        log.info("Order {} transitioned to {}", savedOrder.getId(), savedOrder.getStatus());
 
         // 6. BROADCAST THE EVENT TO RABBITMQ
         OrderEvent event = new OrderEvent(
                 savedOrder.getId(),
                 savedOrder.getUserId(),
                 savedOrder.getTotalAmount(),
-                savedOrder.getStatus()
+                savedOrder.getStatus().name()
         );
 
         rabbitTemplate.convertAndSend(
@@ -91,16 +97,17 @@ public class OrderService {
                 RabbitMQConfig.ORDER_ROUTING_KEY,
                 event
         );
-        log.info("OrderCreated event published to RabbitMQ for order: {}", savedOrder.getId());
+        log.info("Saga handed off to Payment Service for order: {}", savedOrder.getId());
 
         return mapToResponse(savedOrder);
     }
 
     private OrderResponse mapToResponse(Order order) {
+        // FIXED: Added <OrderItemResponse> to the List
         List<OrderItemResponse> itemResponses = order.getOrderItems().stream()
                 .map(item -> new OrderItemResponse(item.getId(), item.getProductId(), item.getQuantity(), item.getPrice()))
                 .collect(Collectors.toList());
 
-        return new OrderResponse(order.getId(), order.getUserId(), order.getStatus(), order.getTotalAmount(), itemResponses);
+        return new OrderResponse(order.getId(), order.getUserId(), order.getStatus().name(), order.getTotalAmount(), itemResponses);
     }
 }
