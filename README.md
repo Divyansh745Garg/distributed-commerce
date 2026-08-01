@@ -281,11 +281,8 @@ Instead of attempting to eliminate failures, the architecture is designed to rec
 ## 10. Eventual Consistency
 
 Traditional ACID transactions cannot span multiple independent databases.
-
 Instead, the platform embraces eventual consistency through Saga Choreography.
-
 Every microservice commits only its own local transaction.
-
 Cross-service consistency is achieved through asynchronous domain events.
 
 ---
