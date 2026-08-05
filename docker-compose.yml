@@ -13,12 +13,22 @@ services:
       POSTGRES_DB: commerce_db
     ports:
       - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     container_name: redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -26,6 +36,11 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ==========================================
   # 2. MICROSERVICES (The Java Apps)
@@ -40,7 +55,9 @@ services:
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=password
     depends_on:
-      - postgres
+      postgres:
+          condition: service_healthy
+
 
   product-service:
       build: ./product-service
@@ -53,8 +70,10 @@ services:
         - SPRING_DATASOURCE_PASSWORD=password
         - SPRING_DATA_REDIS_HOST=redis  # <-- Added for Redis Caching
       depends_on:
-        - postgres
-        - redis
+         postgres:
+           condition: service_healthy
+         redis:
+           condition: service_healthy
 
   order-service:
       build: ./order-service
@@ -68,9 +87,12 @@ services:
         - SPRING_DATA_REDIS_HOST=redis
         - SPRING_RABBITMQ_HOST=rabbitmq
       depends_on:
-        - postgres
-        - redis
-        - rabbitmq
+        postgres:
+          condition: service_healthy
+        redis:
+          condition: service_healthy
+        rabbitmq:
+          condition: service_healthy
 
   notification-service:
     build: ./notification-service
@@ -80,7 +102,8 @@ services:
     environment:
       - SPRING_RABBITMQ_HOST=rabbitmq
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
 
   # ==========================================
   # 3. API GATEWAY (The Entry Point)
@@ -91,10 +114,14 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - auth-service
-      - product-service
-      - order-service
-      - redis
+#      auth-service:
+#        condition: service_healthy
+#      product-service:
+#        condition: service_healthy
+#      order-service:
+#        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   payment-service: # <-- Indented exactly 2 spaces, aligned with order-service
     container_name: payment-service
@@ -109,9 +136,12 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - REDIS_HOST=redis
     depends_on:
-      - redis
-      - postgres
-      - rabbitmq
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 #    networks:
 #      - commerce-network
 

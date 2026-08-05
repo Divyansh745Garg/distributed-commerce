@@ -10,6 +10,14 @@ spring:
     port: 5672
     username: guest
     password: guest
+    listener:
+      simple:
+        retry:
+          enabled: true
+          initial-interval: 1000ms
+          max-attempts: 3
+          multiplier: 2.0
+        default-requeue-rejected: false # Send to DLQ instead of infinite loop
   mail:
     host: smtp.mailtrap.io
     port: 2525

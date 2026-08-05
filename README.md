@@ -258,7 +258,7 @@ Blocking workloads such as:
 
 are handled using **Java 21 Virtual Threads (Project Loom)**.
 
-Compared with traditional thread-per-request models, virtual threads allow significantly higher concurrency while consuming fewer operating system resources.
+Compared with traditional thread-per-request models or the EventLoop model using a single thread and Non-Blocking mechanism, virtual threads allow significantly higher concurrency while consuming fewer operating system resources.
 
 ---
 
