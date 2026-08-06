@@ -1117,14 +1117,13 @@ Although the current implementation is still evolving, the architecture is inten
 
 Traditional ACID transactions work well inside a single database.
 
-However, modern microservices own independent databases.
-
-Once multiple services participate in the same business workflow, distributed transactions become impractical.
+However, modern microservices own independent databases. Once multiple services participate in the same business workflow, distributed transactions become impractical.
 
 Rather than relying on Two-Phase Commit (2PC), this platform coordinates business operations using **Saga Choreography**.
 
-Each service completes its own local transaction before publishing a domain event.
+This approach is asynchronous and follows an eventually consistent transactional model, resembling the structure of a typical microservices application architecture. In such a setup, a distributed transaction is achieved through a series of asynchronous transactions across interconnected microservices.
 
+Each service completes its own local transaction before publishing a domain event.
 Other services react to those events independently.
 
 No central coordinator controls the workflow.
@@ -1152,7 +1151,7 @@ Orchestrator
 └── Notification
 ```
 
-While simple to understand, the orchestrator becomes another critical service that must remain available.
+While simple to understand, the orchestrator becomes another critical service that must remain available. In case it is down, there is no way to ensure the correct working of the internal services.
 
 It also introduces tighter coupling because every business workflow depends on a single coordinator.
 
