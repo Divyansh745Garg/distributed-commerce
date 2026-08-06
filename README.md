@@ -10,7 +10,7 @@
 # System Architecture
 
 <p align="center">
-    <img src="./image/HLD.png" width="1100" alt="System Architecture">
+    <img src="./image/HLD 2.png" width="1100" alt="System Architecture">
 </p>
 
 The platform is designed around **loose coupling**, **clear service ownership**, and **fault isolation**. Every microservice owns a single business capability and communicates with other services exclusively through REST APIs or asynchronous events.

@@ -29,7 +29,7 @@ Rather than focusing only on framework usage, the project emphasizes architectur
 # System Architecture
 
 <p align="center">
-    <img src="./image/HLD.png" width="1100">
+    <img src="./image/HLD 2.png" width="1100">
 </p>
 
 The system is designed around loose coupling, clear ownership boundaries, and fault isolation.
