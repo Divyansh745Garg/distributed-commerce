@@ -297,12 +297,10 @@ distributed-ecommerce
 # Future Improvements
 
 - OpenTelemetry distributed tracing
-- Zipkin integration
 - Resilience4j circuit breakers
 - Kafka event streaming
 - Kubernetes deployment manifests
 - GitHub Actions CI/CD pipeline
-- Prometheus & Grafana monitoring
 - Cache-aside strategy for product catalog
 
 ---
