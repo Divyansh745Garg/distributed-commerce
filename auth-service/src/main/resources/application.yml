@@ -19,3 +19,18 @@ jwt:
   secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
   # 24 hours in milliseconds
   expirationMs: 86400000
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0 # 100% sampling for development
+  zipkin:
+    tracing:
+      endpoint: "http://zipkin:9411/api/v2/spans" # Points to the Docker container
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  metrics:
+    tags:
+      application: ${spring.application.name}

@@ -40,3 +40,18 @@ spring:
 application:
   config:
     product-url: ${PRODUCT_SERVICE_URL:http://product-service:8082/api/v1/products}
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0 # 100% sampling for development
+  zipkin:
+    tracing:
+      endpoint: "http://zipkin:9411/api/v2/spans" # Points to the Docker container
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}

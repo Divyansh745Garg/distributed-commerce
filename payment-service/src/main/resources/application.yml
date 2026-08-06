@@ -31,3 +31,21 @@ spring:
           max-attempts: 3
           multiplier: 2.0
         default-requeue-rejected: false # Send to DLQ instead of infinite loop
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0 # 100% sampling for development
+  zipkin:
+    tracing:
+      endpoint: "http://zipkin:9411/api/v2/spans" # Points to the Docker container
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+payment:
+  simulate-success: ${PAYMENT_SIMULATE_SUCCESS:true}

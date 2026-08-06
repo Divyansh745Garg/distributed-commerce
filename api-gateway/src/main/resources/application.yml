@@ -54,3 +54,17 @@ spring:
       timeout: 1000ms          # Max time to wait for a command to finish (1 second)
       connect-timeout: 1000ms  # Max time to wait for a connection to establish (1 second)
 
+management:
+  tracing:
+    sampling:
+      probability: 1.0 # 100% sampling for development
+  zipkin:
+    tracing:
+      endpoint: "http://zipkin:9411/api/v2/spans" # Points to the Docker container
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  metrics:
+    tags:
+      application: ${spring.application.name}

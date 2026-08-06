@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   # ==========================================
-  # 1. INFRASTRUCTURE (Databases & Brokers)
+  # 1. INFRASTRUCTURE (Databases, Brokers & Tracing)
   # ==========================================
   postgres:
     image: postgres:15-alpine
@@ -42,6 +42,37 @@ services:
       timeout: 5s
       retries: 5
 
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+
   # ==========================================
   # 2. MICROSERVICES (The Java Apps)
   # ==========================================
@@ -54,45 +85,53 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=password
+      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
     depends_on:
       postgres:
-          condition: service_healthy
-
+        condition: service_healthy
+      zipkin:
+        condition: service_started
 
   product-service:
-      build: ./product-service
-      container_name: product-service
-      ports:
-        - "8082:8082"
-      environment:
-        - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
-        - SPRING_DATASOURCE_USERNAME=postgres
-        - SPRING_DATASOURCE_PASSWORD=password
-        - SPRING_DATA_REDIS_HOST=redis  # <-- Added for Redis Caching
-      depends_on:
-         postgres:
-           condition: service_healthy
-         redis:
-           condition: service_healthy
+    build: ./product-service
+    container_name: product-service
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=password
+      - SPRING_DATA_REDIS_HOST=redis
+      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      zipkin:
+        condition: service_started
 
   order-service:
-      build: ./order-service
-      container_name: order-service
-      ports:
-        - "8083:8083"
-      environment:
-        - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
-        - SPRING_DATASOURCE_USERNAME=postgres
-        - SPRING_DATASOURCE_PASSWORD=password
-        - SPRING_DATA_REDIS_HOST=redis
-        - SPRING_RABBITMQ_HOST=rabbitmq
-      depends_on:
-        postgres:
-          condition: service_healthy
-        redis:
-          condition: service_healthy
-        rabbitmq:
-          condition: service_healthy
+    build: ./order-service
+    container_name: order-service
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=password
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      zipkin:
+        condition: service_started
 
   notification-service:
     build: ./notification-service
@@ -101,9 +140,37 @@ services:
       - "8084:8084"
     environment:
       - SPRING_RABBITMQ_HOST=rabbitmq
+      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
     depends_on:
       rabbitmq:
         condition: service_healthy
+      zipkin:
+        condition: service_started
+
+  payment-service:
+    build:
+      context: ./payment-service
+    container_name: payment-service
+    ports:
+      - "8085:8085"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=password
+      - RABBITMQ_HOST=rabbitmq
+      - REDIS_HOST=redis
+      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
+      - PAYMENT_SIMULATE_SUCCESS=false # <-- ADD THIS LINE for testing
+
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      zipkin:
+        condition: service_started
 
   # ==========================================
   # 3. API GATEWAY (The Entry Point)
@@ -113,38 +180,165 @@ services:
     container_name: api-gateway
     ports:
       - "8080:8080"
-    depends_on:
-#      auth-service:
-#        condition: service_healthy
-#      product-service:
-#        condition: service_healthy
-#      order-service:
-#        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  payment-service: # <-- Indented exactly 2 spaces, aligned with order-service
-    container_name: payment-service
-    build:
-      context: ./payment-service
-    ports:
-      - "8085:8085"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=password
-      - RABBITMQ_HOST=rabbitmq
-      - REDIS_HOST=redis
+      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
     depends_on:
       redis:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-#    networks:
-#      - commerce-network
+      zipkin:
+        condition: service_started
 
 networks:
-    commerce-network:
-      driver: bridge
+  commerce-network:
+    driver: bridge
+
+#version: '3.8'
+#
+#services:
+#  # ==========================================
+#  # 1. INFRASTRUCTURE (Databases & Brokers)
+#  # ==========================================
+#  postgres:
+#    image: postgres:15-alpine
+#    container_name: postgres
+#    environment:
+#      POSTGRES_USER: postgres
+#      POSTGRES_PASSWORD: password  # Make sure this matches your DB password!
+#      POSTGRES_DB: commerce_db
+#    ports:
+#      - "5432:5432"
+#    healthcheck:
+#      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+#
+#  redis:
+#    image: redis:7-alpine
+#    container_name: redis
+#    ports:
+#      - "6379:6379"
+#    healthcheck:
+#      test: [ "CMD", "redis-cli", "ping" ]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+#
+#  rabbitmq:
+#    image: rabbitmq:3-management-alpine
+#    container_name: rabbitmq
+#    ports:
+#      - "5672:5672"
+#      - "15672:15672"
+#    healthcheck:
+#      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+#
+#  # ==========================================
+#  # 2. MICROSERVICES (The Java Apps)
+#  # ==========================================
+#  auth-service:
+#    build: ./auth-service
+#    container_name: auth-service
+#    ports:
+#      - "8081:8081"
+#    environment:
+#      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
+#      - SPRING_DATASOURCE_USERNAME=postgres
+#      - SPRING_DATASOURCE_PASSWORD=password
+#    depends_on:
+#      postgres:
+#          condition: service_healthy
+#
+#
+#  product-service:
+#      build: ./product-service
+#      container_name: product-service
+#      ports:
+#        - "8082:8082"
+#      environment:
+#        - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
+#        - SPRING_DATASOURCE_USERNAME=postgres
+#        - SPRING_DATASOURCE_PASSWORD=password
+#        - SPRING_DATA_REDIS_HOST=redis  # <-- Added for Redis Caching
+#      depends_on:
+#         postgres:
+#           condition: service_healthy
+#         redis:
+#           condition: service_healthy
+#
+#  order-service:
+#      build: ./order-service
+#      container_name: order-service
+#      ports:
+#        - "8083:8083"
+#      environment:
+#        - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
+#        - SPRING_DATASOURCE_USERNAME=postgres
+#        - SPRING_DATASOURCE_PASSWORD=password
+#        - SPRING_DATA_REDIS_HOST=redis
+#        - SPRING_RABBITMQ_HOST=rabbitmq
+#      depends_on:
+#        postgres:
+#          condition: service_healthy
+#        redis:
+#          condition: service_healthy
+#        rabbitmq:
+#          condition: service_healthy
+#
+#  notification-service:
+#    build: ./notification-service
+#    container_name: notification-service
+#    ports:
+#      - "8084:8084"
+#    environment:
+#      - SPRING_RABBITMQ_HOST=rabbitmq
+#    depends_on:
+#      rabbitmq:
+#        condition: service_healthy
+#
+#  # ==========================================
+#  # 3. API GATEWAY (The Entry Point)
+#  # ==========================================
+#  api-gateway:
+#    build: ./api-gateway
+#    container_name: api-gateway
+#    ports:
+#      - "8080:8080"
+#    depends_on:
+##      auth-service:
+##        condition: service_healthy
+##      product-service:
+##        condition: service_healthy
+##      order-service:
+##        condition: service_healthy
+#      redis:
+#        condition: service_healthy
+#
+#  payment-service: # <-- Indented exactly 2 spaces, aligned with order-service
+#    container_name: payment-service
+#    build:
+#      context: ./payment-service
+#    ports:
+#      - "8085:8085"
+#    environment:
+#      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/commerce_db
+#      - SPRING_DATASOURCE_USERNAME=postgres
+#      - SPRING_DATASOURCE_PASSWORD=password
+#      - RABBITMQ_HOST=rabbitmq
+#      - REDIS_HOST=redis
+#    depends_on:
+#      redis:
+#        condition: service_healthy
+#      postgres:
+#        condition: service_healthy
+#      rabbitmq:
+#        condition: service_healthy
+##    networks:
+##      - commerce-network
+#
+#networks:
+#    commerce-network:
+#      driver: bridge

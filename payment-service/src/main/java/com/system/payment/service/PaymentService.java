@@ -6,27 +6,47 @@ import com.system.payment.dto.PaymentEvent;
 import com.system.payment.dto.PaymentFailedEvent;
 import com.system.payment.model.Payment;
 import com.system.payment.repository.PaymentRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.slf4j.Slf4j; // <-- Removed @RequiredArgsConstructor
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final RabbitTemplate rabbitTemplate;
 
+    // 1. Declare the counter
+    private final Counter paymentDeclinedCounter;
+
+    @Value("${payment.simulate-success:true}")
+    private boolean simulateSuccess;
+
+    // 2. Custom Constructor: Inject dependencies AND the MeterRegistry
+    public PaymentService(PaymentRepository paymentRepository,
+                          RabbitTemplate rabbitTemplate,
+                          MeterRegistry registry) {
+        this.paymentRepository = paymentRepository;
+        this.rabbitTemplate = rabbitTemplate;
+
+        // 3. Build and register the custom business metric with Prometheus!
+        this.paymentDeclinedCounter = Counter.builder("business_payments_declined_total")
+                .description("Total number of declined payments")
+                .register(registry);
+    }
+
     @Transactional
     public void processPayment(OrderEvent event) {
         log.info("Processing payment of ${} for Order {}", event.totalAmount(), event.orderId());
 
-        // 1. Simulate external payment gateway call
+        // Simulate external payment gateway call
         boolean paymentSuccessful = simulatePaymentGateway();
 
         if (paymentSuccessful) {
@@ -60,6 +80,9 @@ public class PaymentService {
             // ==========================================
             log.error("❌ Payment Declined for Order: {}", event.orderId());
 
+            // 4. INCREMENT THE GRAFANA METRIC!
+            paymentDeclinedCounter.increment();
+
             // Save the failed attempt to the database for our records
             Payment payment = Payment.builder()
                     .orderId(event.orderId())
@@ -87,7 +110,6 @@ public class PaymentService {
 
     // Helper method to let you test the Rollback!
     private boolean simulatePaymentGateway() {
-        // TODO: Change this to 'false' when you want to test the Saga Rollback!
-        return false;
+        return simulateSuccess;
     }
 }
