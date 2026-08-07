@@ -128,6 +128,10 @@ The platform includes a complete observability stack for monitoring application 
 ```text
 http://localhost:9090/targets
 ```
+<p align="center">
+    <img src="./image/Prometheus.png" width="1100" alt="System Architecture">
+</p>
+
 
 ### Verify Target Health
 
@@ -185,6 +189,10 @@ or
 ```text
 http://localhost:9090
 ```
+<p align="center">
+    <img src="./image/Grafana1.png" width="1100" alt="System Architecture">
+</p>
+
 
 5. Click **Save & Test**.
 
@@ -214,7 +222,7 @@ Each request generates a distributed trace that visualizes latency and execution
 - Payment Service
 - Notification Service
 
-This makes it easy to inspect request propagation, identify bottlenecks, and debug failures.
+This makes it easy to inspect request propagation accross the different services, identify bottlenecks, and debug failures.
 
 ---
 
