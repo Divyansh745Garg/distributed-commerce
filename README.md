@@ -89,11 +89,11 @@ cd distributed-ecommerce
 docker compose up --build -d
 ```
 
-> **Note:** Wait approximately **30–45 seconds** for PostgreSQL, Redis, RabbitMQ, Prometheus, Grafana, and Zipkin to initialize before the Spring Boot applications become fully available.
+> **Note:** Wait approximately **30–45 seconds** for PostgreSQL, Redis, RabbitMQ, Prometheus, Grafana, and Zipkin to initialize before the 6 Spring Boot applications become fully available.
 
 ---
 
-## 4. Run the Frontend (Optional)
+## 4. Run the Frontend
 
 If your repository includes a frontend application, navigate into the frontend directory, install the dependencies, and start the development server.
 
