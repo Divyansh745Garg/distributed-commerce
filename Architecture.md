@@ -62,7 +62,11 @@ The platform is intentionally designed around the following engineering goals.
 
 ## 1. Service Isolation
 
-Each microservice owns a single business capability and is responsible for managing its own data and business logic.
+Unlike a Monolitic Architecture, ach microservice owns a single business capability and is responsible for managing its own data and business logic.
+<p align="center">
+    <img src="./image/1559719981650monolith.jpeg" width="1200"><br>
+    <sub><i>Image Source: <a href="https://www.linkedin.com/pulse/monolithic-vs-micro-services-architecture-animesh-sharma">Animesh Sharma LinkedIn</a></i></sub>
+</p>
 
 Services do not access one another's databases directly.
 
@@ -74,7 +78,7 @@ This isolation improves maintainability while allowing services to evolve indepe
 
 ## 2. Failure Isolation
 
-Failures are expected rather than treated as exceptional situations.
+Failures are expected rather than treated as exceptional situations. Since various services are working with each other, if suddenly one service goes down, it should  not result in the end of the **request-responce lifecycle**
 
 If a downstream service becomes unavailable, the remaining components should continue operating wherever possible without bringing down the entire platform.
 
@@ -84,7 +88,7 @@ This philosophy influences every major architectural decision throughout the sys
 
 ## 3. Event-Driven Collaboration
 
-Long-running business workflows should avoid synchronous dependencies whenever immediate consistency is unnecessary.
+Which is why, long-running business workflows should avoid synchronous dependencies whenever immediate consistency is unnecessary.
 
 Instead of tightly coupling services together through direct HTTP calls, the platform publishes domain events that interested services consume independently.
 
@@ -1415,10 +1419,11 @@ This pipeline architecture improves maintainability while making it straightforw
 The platform targets Java 21 and leverages **Virtual Threads (Project Loom)** for handling blocking workloads.
 
 Traditional thread-per-request architectures allocate one operating system thread to every incoming request.
-
 Under heavy load this quickly becomes expensive in terms of memory consumption and context-switch overhead.
 
 Virtual Threads allow the application to maintain the familiar imperative programming model while dramatically increasing the number of concurrent requests that can be processed.
+
+It helps us have the best of the thread-per-request as well as the single threaded Event-Loop architecure. 
 
 Typical blocking operations include:
 
@@ -1627,14 +1632,18 @@ Future work is organized into the following areas.
 
 ## Observability
 
-- Prometheus
-- Grafana
-- Zipkin
+[//]: # (- Prometheus)
+
+[//]: # (- Grafana)
+
+[//]: # (- Zipkin)
 - OpenTelemetry
-- Centralized logging
+
+[//]: # (- Centralized logging)
 
 ## Scalability
 
+- Handling 1000's of transactions concurrently
 - Kubernetes deployment
 - Kafka event streaming
 - Service discovery
